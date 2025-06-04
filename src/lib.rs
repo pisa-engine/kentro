@@ -164,7 +164,7 @@ impl KMeans {
             rayon::ThreadPoolBuilder::new()
                 .num_threads(threads)
                 .build_global()
-                .map_err(|e| KMeansError::InvalidParameter(format!("Thread setup failed: {}", e)))?;
+                .map_err(|e| KMeansError::InvalidParameter(format!("Thread setup failed: {e}")))?;
         }
         
         // Initialize
