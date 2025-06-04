@@ -164,7 +164,7 @@
 <a href=#164 id=164 data-nosnippet>164</a>            rayon::ThreadPoolBuilder::new()
 <a href=#165 id=165 data-nosnippet>165</a>                .num_threads(threads)
 <a href=#166 id=166 data-nosnippet>166</a>                .build_global()
-<a href=#167 id=167 data-nosnippet>167</a>                .map_err(|e| KMeansError::InvalidParameter(<span class="macro">format!</span>(<span class="string">"Thread setup failed: {}"</span>, e)))<span class="question-mark">?</span>;
+<a href=#167 id=167 data-nosnippet>167</a>                .map_err(|e| KMeansError::InvalidParameter(<span class="macro">format!</span>(<span class="string">"Thread setup failed: {e}"</span>)))<span class="question-mark">?</span>;
 <a href=#168 id=168 data-nosnippet>168</a>        }
 <a href=#169 id=169 data-nosnippet>169</a>        
 <a href=#170 id=170 data-nosnippet>170</a>        <span class="comment">// Initialize
