@@ -2,6 +2,9 @@
 name = "kentro"
 version = "0.1.0"
 edition = "2021"
+description = "A high-performance Rust implementation of K-Means clustering algorithms."
+license = "Apache-2.0"
+repository = "https://github.com/pisa-engine/kentro"
 
 [dependencies]
 ndarray = { version = "0.16"}
