@@ -1,0 +1,20 @@
+[package]
+name = "kentro"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ndarray = { version = "0.16"}
+rand = "0.8"
+rand_distr = "0.4"
+rayon = { version = "1.7", optional = true }
+thiserror = "2.0"
+
+[features]
+default = ["parallel"]
+parallel = ["rayon"]
+
+
+[[example]]
+name = "simple"
+path = "examples/simple.rs"
