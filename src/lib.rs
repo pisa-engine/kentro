@@ -670,15 +670,21 @@ impl KMeans {
 
                 // Update old centroid
                 if n_old > 0.0 {
-                    let new_centroid = &unnormalized_centroids.row(old_cluster) / (n_old - 1.0);
-                    if let Some(ref mut centroids) = self.centroids {
-                        centroids.row_mut(old_cluster).assign(&new_centroid);
-                        if !self.euclidean {
-                            let norm =
-                                (centroids.row(old_cluster).dot(&centroids.row(old_cluster)))
-                                    .sqrt();
-                            if norm > 0.0 {
-                                centroids.row_mut(old_cluster).mapv_inplace(|x| x / norm);
+                    if self.use_medoids {
+                        // For medoids, find the best medoid from remaining points in old cluster
+                        self.update_medoid_for_cluster(data, old_cluster);
+                    } else {
+                        // For standard k-means, compute averaged centroid
+                        let new_centroid = &unnormalized_centroids.row(old_cluster) / (n_old - 1.0);
+                        if let Some(ref mut centroids) = self.centroids {
+                            centroids.row_mut(old_cluster).assign(&new_centroid);
+                            if !self.euclidean {
+                                let norm =
+                                    (centroids.row(old_cluster).dot(&centroids.row(old_cluster)))
+                                        .sqrt();
+                                if norm > 0.0 {
+                                    centroids.row_mut(old_cluster).mapv_inplace(|x| x / norm);
+                                }
                             }
                         }
                     }
@@ -733,15 +739,21 @@ impl KMeans {
                     .scaled_add(1.0, &point);
 
                 // Update new centroid
-                let new_centroid =
-                    &unnormalized_centroids.row(min_cluster) / self.cluster_sizes[min_cluster];
-                if let Some(ref mut centroids) = self.centroids {
-                    centroids.row_mut(min_cluster).assign(&new_centroid);
-                    if !self.euclidean {
-                        let norm =
-                            (centroids.row(min_cluster).dot(&centroids.row(min_cluster))).sqrt();
-                        if norm > 0.0 {
-                            centroids.row_mut(min_cluster).mapv_inplace(|x| x / norm);
+                if self.use_medoids {
+                    // For medoids, find the best medoid from points in new cluster
+                    self.update_medoid_for_cluster(data, min_cluster);
+                } else {
+                    // For standard k-means, compute averaged centroid
+                    let new_centroid =
+                        &unnormalized_centroids.row(min_cluster) / self.cluster_sizes[min_cluster];
+                    if let Some(ref mut centroids) = self.centroids {
+                        centroids.row_mut(min_cluster).assign(&new_centroid);
+                        if !self.euclidean {
+                            let norm =
+                                (centroids.row(min_cluster).dot(&centroids.row(min_cluster))).sqrt();
+                            if norm > 0.0 {
+                                centroids.row_mut(min_cluster).mapv_inplace(|x| x / norm);
+                            }
                         }
                     }
                 }
@@ -776,7 +788,111 @@ impl KMeans {
             }
         }
 
+        // After balancing, update medoid indices if using medoids
+        if self.use_medoids {
+            self.update_medoids_after_balancing(data);
+        }
+
         Ok(())
+    }
+
+    fn update_medoids_after_balancing(&mut self, data: &ArrayView2<f32>) {
+        // For each cluster, find the data point that best represents the current centroid
+        for cluster_id in 0..self.n_clusters {
+            if self.cluster_sizes[cluster_id] == 0.0 {
+                continue;
+            }
+
+            // Get all points assigned to this cluster
+            let cluster_points: Vec<usize> = self
+                .assignments
+                .iter()
+                .enumerate()
+                .filter_map(|(point_idx, &assigned_cluster)| {
+                    if assigned_cluster == cluster_id {
+                        Some(point_idx)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            if cluster_points.is_empty() {
+                continue;
+            }
+
+            // Find the point closest to the current centroid
+            let current_centroid = self.centroids.as_ref().unwrap().row(cluster_id);
+            let mut best_medoid = cluster_points[0];
+            let mut best_distance = f32::INFINITY;
+
+            for &candidate_idx in &cluster_points {
+                let candidate_point = data.row(candidate_idx);
+                let distance = if self.euclidean {
+                    let diff = &candidate_point - &current_centroid;
+                    diff.dot(&diff)
+                } else {
+                    1.0 - candidate_point.dot(&current_centroid)
+                };
+
+                if distance < best_distance {
+                    best_distance = distance;
+                    best_medoid = candidate_idx;
+                }
+            }
+
+            // Update medoid index and centroid to match the selected medoid
+            self.medoid_indices[cluster_id] = best_medoid;
+            if let Some(ref mut centroids) = self.centroids {
+                centroids.row_mut(cluster_id).assign(&data.row(best_medoid));
+            }
+        }
+    }
+
+    fn update_medoid_for_cluster(&mut self, data: &ArrayView2<f32>, cluster_id: usize) {
+        // Get all points assigned to this cluster
+        let cluster_points: Vec<usize> = self
+            .assignments
+            .iter()
+            .enumerate()
+            .filter_map(|(point_idx, &assigned_cluster)| {
+                if assigned_cluster == cluster_id {
+                    Some(point_idx)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        if cluster_points.is_empty() {
+            return;
+        }
+
+        // Find the point closest to the current centroid
+        let current_centroid = self.centroids.as_ref().unwrap().row(cluster_id);
+        let mut best_medoid = cluster_points[0];
+        let mut best_distance = f32::INFINITY;
+
+        for &candidate_idx in &cluster_points {
+            let candidate_point = data.row(candidate_idx);
+            let distance = if self.euclidean {
+                let diff = &candidate_point - &current_centroid;
+                diff.dot(&diff)
+            } else {
+                1.0 - candidate_point.dot(&current_centroid)
+            };
+
+            if distance < best_distance {
+                best_distance = distance;
+                best_medoid = candidate_idx;
+            }
+        }
+
+        // Update medoid index and centroid to match the selected medoid
+        self.medoid_indices[cluster_id] = best_medoid;
+        if let Some(ref mut centroids) = self.centroids {
+            centroids.row_mut(cluster_id).assign(&data.row(best_medoid));
+        }
     }
 }
 
@@ -932,5 +1048,55 @@ mod tests {
         let max_size = *sizes.iter().max().unwrap();
         let min_size = *sizes.iter().min().unwrap();
         assert!(max_size - min_size <= 1); // Should be well balanced
+    }
+
+    #[test]
+    fn test_medoid_consistency_after_balancing() {
+        // Test that medoid indices correspond to actual cluster centers after balancing
+        let data = Array2::from_shape_vec(
+            (12, 2),
+            vec![
+                1.0, 1.0, 1.1, 1.1, 1.2, 1.2, 1.3, 1.3,  // 4 points near (1,1)
+                5.0, 5.0, 5.1, 5.1, 5.2, 5.2, 5.3, 5.3,  // 4 points near (5,5)  
+                9.0, 9.0, 9.1, 9.1, 9.2, 9.2, 9.3, 9.3,  // 4 points near (9,9)
+            ],
+        )
+        .unwrap();
+
+        let mut kmeans = KMeans::new(3)
+            .with_use_medoids(true)
+            .with_balanced(true)
+            .with_euclidean(true)
+            .with_max_balance_diff(1)  // Force tight balance (was 0, but 0 is not allowed)
+            .with_verbose(false);
+        
+        let clusters = kmeans.train(data.view(), None).unwrap();
+
+        // Verify that each cluster has exactly 4 points (perfectly balanced)
+        for cluster in &clusters {
+            assert_eq!(cluster.len(), 4);
+        }
+
+        // Verify that medoid indices point to actual data points that are cluster centers
+        if let Some(medoids) = kmeans.medoid_indices() {
+            if let Some(centroids) = kmeans.centroids() {
+                for (cluster_id, &medoid_idx) in medoids.iter().enumerate() {
+                    let medoid_point = data.row(medoid_idx);
+                    let centroid = centroids.row(cluster_id);
+                    
+                    // The medoid point should exactly match the centroid since we're using medoids
+                    for j in 0..medoid_point.len() {
+                        assert!((medoid_point[j] - centroid[j]).abs() < 1e-6, 
+                               "Medoid point {:?} doesn't match centroid {:?} for cluster {}", 
+                               medoid_point, centroid, cluster_id);
+                    }
+                    
+                    // Verify the medoid is actually assigned to its own cluster
+                    let medoid_cluster = clusters.iter().position(|cluster| cluster.contains(&medoid_idx));
+                    assert_eq!(medoid_cluster, Some(cluster_id), 
+                              "Medoid {} not found in its own cluster {}", medoid_idx, cluster_id);
+                }
+            }
+        }
     }
 }
