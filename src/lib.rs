@@ -750,7 +750,8 @@ impl KMeans {
                         centroids.row_mut(min_cluster).assign(&new_centroid);
                         if !self.euclidean {
                             let norm =
-                                (centroids.row(min_cluster).dot(&centroids.row(min_cluster))).sqrt();
+                                (centroids.row(min_cluster).dot(&centroids.row(min_cluster)))
+                                    .sqrt();
                             if norm > 0.0 {
                                 centroids.row_mut(min_cluster).mapv_inplace(|x| x / norm);
                             }
@@ -1056,9 +1057,9 @@ mod tests {
         let data = Array2::from_shape_vec(
             (12, 2),
             vec![
-                1.0, 1.0, 1.1, 1.1, 1.2, 1.2, 1.3, 1.3,  // 4 points near (1,1)
-                5.0, 5.0, 5.1, 5.1, 5.2, 5.2, 5.3, 5.3,  // 4 points near (5,5)  
-                9.0, 9.0, 9.1, 9.1, 9.2, 9.2, 9.3, 9.3,  // 4 points near (9,9)
+                1.0, 1.0, 1.1, 1.1, 1.2, 1.2, 1.3, 1.3, // 4 points near (1,1)
+                5.0, 5.0, 5.1, 5.1, 5.2, 5.2, 5.3, 5.3, // 4 points near (5,5)
+                9.0, 9.0, 9.1, 9.1, 9.2, 9.2, 9.3, 9.3, // 4 points near (9,9)
             ],
         )
         .unwrap();
@@ -1067,9 +1068,9 @@ mod tests {
             .with_use_medoids(true)
             .with_balanced(true)
             .with_euclidean(true)
-            .with_max_balance_diff(1)  // Force tight balance (was 0, but 0 is not allowed)
+            .with_max_balance_diff(1) // Force tight balance (was 0, but 0 is not allowed)
             .with_verbose(false);
-        
+
         let clusters = kmeans.train(data.view(), None).unwrap();
 
         // Verify that each cluster has exactly 4 points (perfectly balanced)
@@ -1083,18 +1084,29 @@ mod tests {
                 for (cluster_id, &medoid_idx) in medoids.iter().enumerate() {
                     let medoid_point = data.row(medoid_idx);
                     let centroid = centroids.row(cluster_id);
-                    
+
                     // The medoid point should exactly match the centroid since we're using medoids
                     for j in 0..medoid_point.len() {
-                        assert!((medoid_point[j] - centroid[j]).abs() < 1e-6, 
-                               "Medoid point {:?} doesn't match centroid {:?} for cluster {}", 
-                               medoid_point, centroid, cluster_id);
+                        assert!(
+                            (medoid_point[j] - centroid[j]).abs() < 1e-6,
+                            "Medoid point {:?} doesn't match centroid {:?} for cluster {}",
+                            medoid_point,
+                            centroid,
+                            cluster_id
+                        );
                     }
-                    
+
                     // Verify the medoid is actually assigned to its own cluster
-                    let medoid_cluster = clusters.iter().position(|cluster| cluster.contains(&medoid_idx));
-                    assert_eq!(medoid_cluster, Some(cluster_id), 
-                              "Medoid {} not found in its own cluster {}", medoid_idx, cluster_id);
+                    let medoid_cluster = clusters
+                        .iter()
+                        .position(|cluster| cluster.contains(&medoid_idx));
+                    assert_eq!(
+                        medoid_cluster,
+                        Some(cluster_id),
+                        "Medoid {} not found in its own cluster {}",
+                        medoid_idx,
+                        cluster_id
+                    );
                 }
             }
         }
