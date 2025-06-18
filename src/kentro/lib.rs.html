@@ -336,7 +336,7 @@
 <a href=#336 id=336 data-nosnippet>336</a>    <span class="doccomment">/// Get the cluster centroids
 <a href=#337 id=337 data-nosnippet>337</a>    ///
 <a href=#338 id=338 data-nosnippet>338</a>    /// Returns None if the model hasn't been trained yet
-<a href=#339 id=339 data-nosnippet>339</a>    </span><span class="kw">pub fn </span>centroids(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;ArrayView2&lt;f32&gt;&gt; {
+<a href=#339 id=339 data-nosnippet>339</a>    </span><span class="kw">pub fn </span>centroids(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;ArrayView2&lt;<span class="lifetime">'_</span>, f32&gt;&gt; {
 <a href=#340 id=340 data-nosnippet>340</a>        <span class="self">self</span>.centroids.as_ref().map(|c| c.view())
 <a href=#341 id=341 data-nosnippet>341</a>    }
 <a href=#342 id=342 data-nosnippet>342</a>
