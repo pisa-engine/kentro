@@ -336,7 +336,7 @@ impl KMeans {
     /// Get the cluster centroids
     ///
     /// Returns None if the model hasn't been trained yet
-    pub fn centroids(&self) -> Option<ArrayView2<f32>> {
+    pub fn centroids(&self) -> Option<ArrayView2<'_, f32>> {
         self.centroids.as_ref().map(|c| c.view())
     }
 
