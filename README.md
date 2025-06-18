@@ -16,6 +16,7 @@ A high-performance Rust implementation of K-Means clustering algorithms. Kentro 
 - **Standard K-Means**: Classic Lloyd's algorithm implementation
 - **Spherical K-Means**: Uses cosine similarity instead of Euclidean distance
 - **Balanced K-Means**: Ensures clusters have similar sizes using efficient balancing algorithms
+- **K-Medoids**: PAM (Partition Around Medoids) algorithm for robust clustering with actual data points as centers
 - **Parallel Processing**: Multi-threaded execution using Rayon
 - **Flexible API**: Builder pattern for easy configuration
 - **Memory Efficient**: Optimized for large datasets
@@ -66,6 +67,7 @@ let kmeans = KMeans::new(3)                    // 3 clusters
     .with_iterations(50)                       // 50 iterations (default: 25)
     .with_euclidean(true)                      // Use Euclidean distance (default: false)
     .with_balanced(true)                       // Enable balanced clustering (default: false)
+    .with_use_medoids(true)                    // Enable K-medoids clustering (default: false)
     .with_max_balance_diff(10)                 // Max cluster size difference (default: 16)
     .with_verbose(true);                       // Enable verbose output (default: false)
 ```
@@ -98,11 +100,17 @@ if let Some(centroids) = kmeans.centroids() {
     println!("Centroids shape: {:?}", centroids.dim());
 }
 
+// Get medoid indices (when using K-medoids)
+if let Some(medoids) = kmeans.medoid_indices() {
+    println!("Medoid indices: {:?}", medoids);
+}
+
 // Check model state
 println!("Trained: {}", kmeans.is_trained());
 println!("Clusters: {}", kmeans.n_clusters());
 println!("Euclidean: {}", kmeans.is_euclidean());
 println!("Balanced: {}", kmeans.is_balanced());
+println!("Using medoids: {}", kmeans.is_use_medoids());
 ```
 
 ## 🎯 Algorithm Variants
@@ -129,6 +137,21 @@ Ensures clusters have similar sizes using the algorithm from:
 let mut kmeans = KMeans::new(5)
     .with_balanced(true)
     .with_max_balance_diff(10);
+```
+
+### K-Medoids
+Uses actual data points as cluster centers instead of computed centroids. More robust to outliers and provides interpretable cluster representatives.
+
+```rust
+let mut kmeans = KMeans::new(5)
+    .with_use_medoids(true)
+    .with_euclidean(true);
+
+// After training, get the medoid indices
+let clusters = kmeans.train(data.view(), None)?;
+if let Some(medoids) = kmeans.medoid_indices() {
+    println!("Medoid points: {:?}", medoids);
+}
 ```
 
 ## ⚡ Performance Features
@@ -201,6 +224,43 @@ fn balanced_example() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+### K-Medoids Clustering
+
+```rust
+fn medoids_example() -> Result<(), Box<dyn std::error::Error>> {
+    // Generate sample data with some outliers
+    let mut data_vec = vec![];
+    
+    // Cluster 1: around (1, 1)
+    data_vec.extend_from_slice(&[1.0, 1.0, 1.1, 1.1, 1.2, 1.0, 0.9, 1.1]);
+    // Cluster 2: around (5, 5) 
+    data_vec.extend_from_slice(&[5.0, 5.0, 5.1, 5.1, 4.9, 5.0, 5.0, 4.9]);
+    // Outlier
+    data_vec.extend_from_slice(&[10.0, 1.0]);
+    
+    let data = Array2::from_shape_vec((9, 2), data_vec)?;
+    
+    // Use K-Medoids for robustness to outliers
+    let mut kmeans = KMeans::new(3)
+        .with_use_medoids(true)
+        .with_euclidean(true)
+        .with_verbose(true);
+    
+    let clusters = kmeans.train(data.view(), None)?;
+    
+    // Get the actual data points used as cluster centers
+    if let Some(medoids) = kmeans.medoid_indices() {
+        println!("Medoid points:");
+        for (i, &medoid_idx) in medoids.iter().enumerate() {
+            let medoid_point = data.row(medoid_idx);
+            println!("  Cluster {}: Point {} [{:.1}, {:.1}]", 
+                     i, medoid_idx, medoid_point[0], medoid_point[1]);
+        }
+    }
+    
+    Ok(())
+}
+
 ### Text Clustering (Spherical K-Means)
 
 ```rust
@@ -260,6 +320,9 @@ cargo test -- --nocapture
 ```bash
 # Run the main example
 cargo run --example simple
+
+# Run the K-Medoids demo
+cargo run --example medoids_demo
 
 # Run with release optimizations
 cargo run --example simple --release
