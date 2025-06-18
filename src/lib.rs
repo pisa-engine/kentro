@@ -3,6 +3,7 @@
 //! A Rust implementation of efficient K-Means clustering with support for:
 //! - Standard and spherical K-Means
 //! - Balanced K-Means clustering
+//! - K-medoids clustering (PAM algorithm)
 //! - Parallel processing
 //! - Euclidean and cosine similarity metrics
 
@@ -39,7 +40,8 @@ type Result<T> = std::result::Result<T, KMeansError>;
 /// High-performance K-Means clustering implementation
 ///
 /// This implementation provides both standard and balanced K-Means clustering
-/// with support for Euclidean and cosine similarity metrics.
+/// with support for Euclidean and cosine similarity metrics, as well as
+/// K-medoids clustering using the PAM (Partition Around Medoids) algorithm.
 ///
 /// # Examples
 ///
@@ -50,9 +52,17 @@ type Result<T> = std::result::Result<T, KMeansError>;
 /// // Create sample data
 /// let data = Array2::from_shape_vec((100, 2), (0..200).map(|x| x as f32).collect()).unwrap();
 ///
-/// // Create and train K-Means
-/// let mut kmeans = KMeans::new(3).with_iterations(50).with_verbose(true);
+/// // Create and train K-Means with medoids
+/// let mut kmeans = KMeans::new(3)
+///     .with_use_medoids(true)
+///     .with_iterations(50)
+///     .with_verbose(true);
 /// let clusters = kmeans.train(data.view(), None).unwrap();
+///
+/// // Get the medoid indices
+/// if let Some(medoids) = kmeans.medoid_indices() {
+///     println!("Medoid indices: {:?}", medoids);
+/// }
 ///
 /// println!("Found {} clusters", clusters.len());
 /// ```
@@ -64,9 +74,11 @@ pub struct KMeans {
     max_balance_diff: usize,
     verbose: bool,
     trained: bool,
+    use_medoids: bool,
 
     // Internal state
     centroids: Option<Array2<f32>>,
+    medoid_indices: Vec<usize>, // Indices of medoid points in the original data
     assignments: Vec<usize>,
     cluster_sizes: Array1<f32>,
 }
@@ -94,7 +106,9 @@ impl KMeans {
             max_balance_diff: 16,
             verbose: false,
             trained: false,
+            use_medoids: false,
             centroids: None,
+            medoid_indices: Vec::new(),
             assignments: Vec::new(),
             cluster_sizes: Array1::zeros(n_clusters),
         }
@@ -133,6 +147,12 @@ impl KMeans {
     /// Enable verbose output (default: false)
     pub fn with_verbose(mut self, verbose: bool) -> Self {
         self.verbose = verbose;
+        self
+    }
+
+    /// Enable K-medoids clustering (default: false)
+    pub fn with_use_medoids(mut self, use_medoids: bool) -> Self {
+        self.use_medoids = use_medoids;
         self
     }
 
@@ -189,7 +209,11 @@ impl KMeans {
         // Main K-Means iterations
         for iter in 0..self.iters {
             self.assign_clusters(&data, data_norms.as_ref());
-            self.update_centroids(&data);
+            if self.use_medoids {
+                self.update_medoids(&data);
+            } else {
+                self.update_centroids(&data);
+            }
             self.split_clusters(&data);
             self.postprocess_centroids();
 
@@ -304,11 +328,27 @@ impl KMeans {
         self.balanced
     }
 
+    /// Check if using medoids clustering
+    pub fn is_use_medoids(&self) -> bool {
+        self.use_medoids
+    }
+
     /// Get the cluster centroids
     ///
     /// Returns None if the model hasn't been trained yet
     pub fn centroids(&self) -> Option<ArrayView2<f32>> {
         self.centroids.as_ref().map(|c| c.view())
+    }
+
+    /// Get the medoid indices (only available when using medoids)
+    ///
+    /// Returns the indices of the medoid points in the original dataset
+    pub fn medoid_indices(&self) -> Option<&[usize]> {
+        if self.use_medoids && self.trained {
+            Some(&self.medoid_indices)
+        } else {
+            None
+        }
     }
 
     /// Check if the model has been trained
@@ -319,18 +359,30 @@ impl KMeans {
 
 // Private implementation methods
 impl KMeans {
-    fn sample_rows(&self, data: &ArrayView2<f32>) -> Array2<f32> {
+    fn sample_rows(&mut self, data: &ArrayView2<f32>) -> Array2<f32> {
         let mut rng = thread_rng();
         let n = data.nrows();
         let mut indices: Vec<usize> = (0..n).collect();
         indices.shuffle(&mut rng);
 
-        let mut centroids = Array2::zeros((self.n_clusters, data.ncols()));
-        for (i, &idx) in indices.iter().take(self.n_clusters).enumerate() {
-            centroids.row_mut(i).assign(&data.row(idx));
-        }
+        if self.use_medoids {
+            // Initialize medoid indices
+            self.medoid_indices = indices.iter().take(self.n_clusters).cloned().collect();
 
-        centroids
+            // Create centroids from medoid points
+            let mut centroids = Array2::zeros((self.n_clusters, data.ncols()));
+            for (i, &idx) in self.medoid_indices.iter().enumerate() {
+                centroids.row_mut(i).assign(&data.row(idx));
+            }
+            centroids
+        } else {
+            // Standard centroid initialization
+            let mut centroids = Array2::zeros((self.n_clusters, data.ncols()));
+            for (i, &idx) in indices.iter().take(self.n_clusters).enumerate() {
+                centroids.row_mut(i).assign(&data.row(idx));
+            }
+            centroids
+        }
     }
 
     fn assign_clusters(&mut self, data: &ArrayView2<f32>, data_norms: Option<&Array1<f32>>) {
@@ -411,6 +463,66 @@ impl KMeans {
         self.centroids = Some(centroids);
     }
 
+    fn update_medoids(&mut self, data: &ArrayView2<f32>) {
+        // For each cluster, find the point that minimizes total distance to all points in cluster
+        for cluster_id in 0..self.n_clusters {
+            if self.cluster_sizes[cluster_id] == 0.0 {
+                continue;
+            }
+
+            // Get all points assigned to this cluster
+            let cluster_points: Vec<usize> = self
+                .assignments
+                .iter()
+                .enumerate()
+                .filter_map(|(point_idx, &assigned_cluster)| {
+                    if assigned_cluster == cluster_id {
+                        Some(point_idx)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            if cluster_points.is_empty() {
+                continue;
+            }
+
+            // Find the point that minimizes total distance to all other points in the cluster
+            let mut best_medoid = cluster_points[0];
+            let mut best_cost = f32::INFINITY;
+
+            for &candidate_idx in &cluster_points {
+                let candidate_point = data.row(candidate_idx);
+                let mut total_cost = 0.0;
+
+                for &other_idx in &cluster_points {
+                    if candidate_idx != other_idx {
+                        let other_point = data.row(other_idx);
+                        let distance = if self.euclidean {
+                            let diff = &candidate_point - &other_point;
+                            diff.dot(&diff)
+                        } else {
+                            1.0 - candidate_point.dot(&other_point)
+                        };
+                        total_cost += distance;
+                    }
+                }
+
+                if total_cost < best_cost {
+                    best_cost = total_cost;
+                    best_medoid = candidate_idx;
+                }
+            }
+
+            // Update medoid index and centroid
+            self.medoid_indices[cluster_id] = best_medoid;
+            if let Some(ref mut centroids) = self.centroids {
+                centroids.row_mut(cluster_id).assign(&data.row(best_medoid));
+            }
+        }
+    }
+
     fn postprocess_centroids(&mut self) {
         if !self.euclidean {
             // Normalize centroids for spherical k-means
@@ -443,19 +555,46 @@ impl KMeans {
                     j = (j + 1) % self.n_clusters;
                 }
 
-                // Split cluster j
-                if let Some(ref mut centroids) = self.centroids {
-                    let centroid_j = centroids.row(j).to_owned();
-                    centroids.row_mut(i).assign(&centroid_j);
+                if self.use_medoids {
+                    // For medoids, find a random point from cluster j to be the new medoid
+                    let cluster_j_points: Vec<usize> = self
+                        .assignments
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(point_idx, &assigned_cluster)| {
+                            if assigned_cluster == j {
+                                Some(point_idx)
+                            } else {
+                                None
+                            }
+                        })
+                        .collect();
 
-                    // Apply small symmetric perturbation
-                    for k in 0..data.ncols() {
-                        if k % 2 == 0 {
-                            centroids[[i, k]] *= 1.0 + EPS;
-                            centroids[[j, k]] *= 1.0 - EPS;
-                        } else {
-                            centroids[[i, k]] *= 1.0 - EPS;
-                            centroids[[j, k]] *= 1.0 + EPS;
+                    if !cluster_j_points.is_empty() {
+                        let random_point_idx =
+                            cluster_j_points[rng.gen_range(0..cluster_j_points.len())];
+                        self.medoid_indices[i] = random_point_idx;
+
+                        // Update centroids from medoid points
+                        if let Some(ref mut centroids) = self.centroids {
+                            centroids.row_mut(i).assign(&data.row(random_point_idx));
+                        }
+                    }
+                } else {
+                    // Split cluster j (original centroid logic)
+                    if let Some(ref mut centroids) = self.centroids {
+                        let centroid_j = centroids.row(j).to_owned();
+                        centroids.row_mut(i).assign(&centroid_j);
+
+                        // Apply small symmetric perturbation
+                        for k in 0..data.ncols() {
+                            if k % 2 == 0 {
+                                centroids[[i, k]] *= 1.0 + EPS;
+                                centroids[[j, k]] *= 1.0 - EPS;
+                            } else {
+                                centroids[[i, k]] *= 1.0 - EPS;
+                                centroids[[j, k]] *= 1.0 + EPS;
+                            }
                         }
                     }
                 }
@@ -727,5 +866,71 @@ mod tests {
             Err(KMeansError::InsufficientPoints(2, 3)) => {}
             _ => panic!("Expected InsufficientPoints error"),
         }
+    }
+
+    #[test]
+    fn test_medoids_clustering() {
+        let data = Array2::from_shape_vec(
+            (6, 2),
+            vec![1.0, 1.0, 1.1, 1.1, 5.0, 5.0, 5.1, 5.1, 9.0, 9.0, 9.1, 9.1],
+        )
+        .unwrap();
+
+        let mut kmeans = KMeans::new(3).with_use_medoids(true).with_euclidean(true);
+        let clusters = kmeans.train(data.view(), None).unwrap();
+
+        assert_eq!(clusters.len(), 3);
+        assert!(kmeans.is_trained());
+        assert!(kmeans.is_use_medoids());
+
+        // Check that medoid indices are valid
+        if let Some(medoids) = kmeans.medoid_indices() {
+            assert_eq!(medoids.len(), 3);
+            for &medoid_idx in medoids {
+                assert!(medoid_idx < data.nrows());
+            }
+        } else {
+            panic!("Medoid indices should be available after training");
+        }
+    }
+
+    #[test]
+    fn test_balanced_medoids() {
+        let data = Array2::from_shape_vec(
+            (9, 2),
+            vec![
+                1.0, 1.0, 1.1, 1.1, 1.2, 1.2, 5.0, 5.0, 5.1, 5.1, 5.2, 5.2, 9.0, 9.0, 9.1, 9.1,
+                9.2, 9.2,
+            ],
+        )
+        .unwrap();
+
+        let mut kmeans = KMeans::new(3)
+            .with_use_medoids(true)
+            .with_balanced(true)
+            .with_euclidean(true)
+            .with_max_balance_diff(1);
+        let clusters = kmeans.train(data.view(), None).unwrap();
+
+        assert_eq!(clusters.len(), 3);
+        assert!(kmeans.is_trained());
+        assert!(kmeans.is_use_medoids());
+        assert!(kmeans.is_balanced());
+
+        // Check that medoid indices are valid
+        if let Some(medoids) = kmeans.medoid_indices() {
+            assert_eq!(medoids.len(), 3);
+            for &medoid_idx in medoids {
+                assert!(medoid_idx < data.nrows());
+            }
+        } else {
+            panic!("Medoid indices should be available after training");
+        }
+
+        // Check that clusters are reasonably balanced
+        let sizes: Vec<usize> = clusters.iter().map(|c| c.len()).collect();
+        let max_size = *sizes.iter().max().unwrap();
+        let min_size = *sizes.iter().min().unwrap();
+        assert!(max_size - min_size <= 1); // Should be well balanced
     }
 }

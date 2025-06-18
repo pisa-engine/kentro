@@ -21,3 +21,7 @@ parallel = ["rayon"]
 [[example]]
 name = "simple"
 path = "examples/simple.rs"
+
+[[example]]
+name = "medoids_demo"
+path = "examples/medoids_demo.rs"
