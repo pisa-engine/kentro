@@ -21,6 +21,7 @@ A high-performance Rust implementation of K-Means clustering algorithms. Kentro 
 - **Flexible API**: Builder pattern for easy configuration
 - **Memory Efficient**: Optimized for large datasets
 - **Comprehensive Error Handling**: Detailed error types and messages
+- **Python Bindings**: Full Python API with NumPy integration and automatic version synchronization - see [PYTHON.md](PYTHON.md) for details
 
 ## 📦 Installation
 
@@ -315,7 +316,9 @@ Run with verbose output:
 cargo test -- --nocapture
 ```
 
-## 🚀 Running Examples
+## 📄 Running Examples
+
+### Rust Examples
 
 ```bash
 # Run the main example
@@ -327,6 +330,32 @@ cargo run --example medoids_demo
 # Run with release optimizations
 cargo run --example simple --release
 ```
+
+### Python Example
+
+First, build the Python bindings:
+
+```bash
+# Build and install the Python bindings
+./build_python.sh
+
+# Or manually:
+maturin develop --features python
+```
+
+Then run the Python example:
+
+```bash
+# Run the comprehensive Python example
+python examples/python_example.py
+```
+
+The Python example demonstrates:
+- Basic K-Means clustering
+- Euclidean vs cosine similarity
+- Balanced clustering
+- K-Medoids clustering
+- All configuration options and error handling
 
 ## 📊 Benchmarks
 

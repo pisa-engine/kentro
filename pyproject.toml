@@ -1,0 +1,44 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "kentro"
+dynamic = ["version"]
+description = "High-performance K-Means clustering library with Python bindings"
+readme = "PYTHON.md"
+requires-python = ">=3.8"
+license = {text = "MIT OR Apache-2.0"}
+authors = [
+    {name = "Your Name", email = "your.email@example.com"},
+]
+keywords = ["clustering", "kmeans", "machine-learning", "unsupervised-learning"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Rust",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "numpy>=1.20.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/kentro"
+Repository = "https://github.com/yourusername/kentro"
+Documentation = "https://github.com/yourusername/kentro#readme"
+Issues = "https://github.com/yourusername/kentro/issues"
+
+[tool.maturin]
+features = ["python"] 

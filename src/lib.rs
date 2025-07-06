@@ -66,6 +66,7 @@ type Result<T> = std::result::Result<T, KMeansError>;
 ///
 /// println!("Found {} clusters", clusters.len());
 /// ```
+#[derive(Clone, Debug)]
 pub struct KMeans {
     n_clusters: usize,
     iters: usize,
@@ -1110,5 +1111,155 @@ mod tests {
                 }
             }
         }
+    }
+}
+
+// Python bindings
+#[cfg(feature = "python")]
+mod python {
+    use numpy::{PyArray2, PyReadonlyArray2};
+    use pyo3::prelude::*;
+    use pyo3::{exceptions::PyValueError, types::PyModule};
+
+    /// Python wrapper for the KMeans struct
+    #[pyclass]
+    struct KMeans {
+        inner: crate::KMeans,
+    }
+
+    #[pymethods]
+    impl KMeans {
+        #[new]
+        fn new(n_clusters: usize) -> PyResult<Self> {
+            if n_clusters == 0 {
+                return Err(PyValueError::new_err("Number of clusters must be positive"));
+            }
+            Ok(Self {
+                inner: crate::KMeans::new(n_clusters),
+            })
+        }
+
+        fn with_iterations(&self, iters: usize) -> PyResult<Self> {
+            if iters == 0 {
+                return Err(PyValueError::new_err("Number of iterations must be positive"));
+            }
+            Ok(Self {
+                inner: self.inner.clone().with_iterations(iters),
+            })
+        }
+
+        fn with_euclidean(&self, euclidean: bool) -> Self {
+            Self {
+                inner: self.inner.clone().with_euclidean(euclidean),
+            }
+        }
+
+        fn with_balanced(&self, balanced: bool) -> Self {
+            Self {
+                inner: self.inner.clone().with_balanced(balanced),
+            }
+        }
+
+        fn with_max_balance_diff(&self, max_balance_diff: usize) -> PyResult<Self> {
+            if max_balance_diff == 0 {
+                return Err(PyValueError::new_err("Max balance difference must be positive"));
+            }
+            Ok(Self {
+                inner: self.inner.clone().with_max_balance_diff(max_balance_diff),
+            })
+        }
+
+        fn with_verbose(&self, verbose: bool) -> Self {
+            Self {
+                inner: self.inner.clone().with_verbose(verbose),
+            }
+        }
+
+        fn with_use_medoids(&self, use_medoids: bool) -> Self {
+            Self {
+                inner: self.inner.clone().with_use_medoids(use_medoids),
+            }
+        }
+
+        fn train(
+            &mut self,
+            data: PyReadonlyArray2<f32>,
+            num_threads: Option<usize>,
+        ) -> PyResult<Vec<Vec<usize>>> {
+            let data_view = data.as_array();
+            self.inner
+                .train(data_view, num_threads)
+                .map_err(|e| PyValueError::new_err(e.to_string()))
+        }
+
+        fn assign(
+            &self,
+            data: PyReadonlyArray2<f32>,
+            k: usize,
+        ) -> PyResult<Vec<Vec<usize>>> {
+            let data_view = data.as_array();
+            self.inner
+                .assign(data_view, k)
+                .map_err(|e| PyValueError::new_err(e.to_string()))
+        }
+
+        #[getter]
+        fn n_clusters(&self) -> usize {
+            self.inner.n_clusters()
+        }
+
+        #[getter]
+        fn iterations(&self) -> usize {
+            self.inner.iterations()
+        }
+
+        #[getter]
+        fn is_euclidean(&self) -> bool {
+            self.inner.is_euclidean()
+        }
+
+        #[getter]
+        fn is_balanced(&self) -> bool {
+            self.inner.is_balanced()
+        }
+
+        #[getter]
+        fn is_use_medoids(&self) -> bool {
+            self.inner.is_use_medoids()
+        }
+
+        #[getter]
+        fn centroids<'py>(&self, py: Python<'py>) -> Option<Bound<'py, PyArray2<f32>>> {
+            self.inner.centroids().map(|c| PyArray2::from_array(py, &c.to_owned()).into())
+        }
+
+        #[getter]
+        fn medoid_indices(&self) -> Option<Vec<usize>> {
+            self.inner.medoid_indices().map(|indices| indices.to_vec())
+        }
+
+        #[getter]
+        fn is_trained(&self) -> bool {
+            self.inner.is_trained()
+        }
+
+        fn __repr__(&self) -> String {
+            format!(
+                "KMeans(n_clusters={}, iterations={}, euclidean={}, balanced={}, use_medoids={}, trained={})",
+                self.inner.n_clusters(),
+                self.inner.iterations(),
+                self.inner.is_euclidean(),
+                self.inner.is_balanced(),
+                self.inner.is_use_medoids(),
+                self.inner.is_trained()
+            )
+        }
+    }
+
+    #[pymodule]
+    fn kentro(m: &Bound<'_, PyModule>) -> PyResult<()> {
+        m.add_class::<KMeans>()?;
+        m.add("__version__", env!("CARGO_PKG_VERSION"))?;
+        Ok(())
     }
 }

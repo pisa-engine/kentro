@@ -1,22 +1,32 @@
 [package]
 name = "kentro"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
-description = "A high-performance Rust implementation of K-Means clustering algorithms."
+description = "High-performance K-Means clustering library"
 license = "Apache-2.0"
 repository = "https://github.com/pisa-engine/kentro"
-
-[dependencies]
-ndarray = { version = "0.16"}
-rand = "0.8"
-rand_distr = "0.4"
-rayon = { version = "1.7", optional = true }
-thiserror = "2.0"
+homepage = "https://github.com/pisa-engine/kentro"
+readme = "README.md"
+keywords = ["clustering", "kmeans", "machine-learning", "unsupervised-learning"]
 
 [features]
 default = ["parallel"]
 parallel = ["rayon"]
+python = ["pyo3", "numpy"]
 
+[dependencies]
+ndarray = "0.16"
+rand = "0.8"
+rand_distr = "0.4"
+thiserror = "1.0"
+rayon = { version = "1.7", optional = true }
+pyo3 = { version = "0.25", features = ["extension-module"], optional = true }
+numpy = { version = "0.25", optional = true }
+
+[lib]
+name = "kentro"
+# Default crate type for Rust library
+crate-type = ["rlib"]
 
 [[example]]
 name = "simple"
@@ -25,3 +35,6 @@ path = "examples/simple.rs"
 [[example]]
 name = "medoids_demo"
 path = "examples/medoids_demo.rs"
+
+[build-dependencies]
+pyo3-build-config = { version = "0.25", optional = true }
