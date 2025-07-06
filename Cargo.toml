@@ -1,6 +1,6 @@
 [package]
 name = "kentro"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2021"
 description = "High-performance K-Means clustering library"
 license = "Apache-2.0"
