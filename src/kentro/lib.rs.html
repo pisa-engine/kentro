@@ -589,7 +589,7 @@
 <a href=#589 id=589 data-nosnippet>589</a>
 <a href=#590 id=590 data-nosnippet>590</a>                        <span class="comment">// Apply small symmetric perturbation
 <a href=#591 id=591 data-nosnippet>591</a>                        </span><span class="kw">for </span>k <span class="kw">in </span><span class="number">0</span>..data.ncols() {
-<a href=#592 id=592 data-nosnippet>592</a>                            <span class="kw">if </span>k % <span class="number">2 </span>== <span class="number">0 </span>{
+<a href=#592 id=592 data-nosnippet>592</a>                            <span class="kw">if </span>k.is_multiple_of(<span class="number">2</span>) {
 <a href=#593 id=593 data-nosnippet>593</a>                                centroids[[i, k]] <span class="kw-2">*</span>= <span class="number">1.0 </span>+ EPS;
 <a href=#594 id=594 data-nosnippet>594</a>                                centroids[[j, k]] <span class="kw-2">*</span>= <span class="number">1.0 </span>- EPS;
 <a href=#595 id=595 data-nosnippet>595</a>                            } <span class="kw">else </span>{
