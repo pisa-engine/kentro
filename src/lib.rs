@@ -1141,7 +1141,9 @@ mod python {
 
         fn with_iterations(&self, iters: usize) -> PyResult<Self> {
             if iters == 0 {
-                return Err(PyValueError::new_err("Number of iterations must be positive"));
+                return Err(PyValueError::new_err(
+                    "Number of iterations must be positive",
+                ));
             }
             Ok(Self {
                 inner: self.inner.clone().with_iterations(iters),
@@ -1162,7 +1164,9 @@ mod python {
 
         fn with_max_balance_diff(&self, max_balance_diff: usize) -> PyResult<Self> {
             if max_balance_diff == 0 {
-                return Err(PyValueError::new_err("Max balance difference must be positive"));
+                return Err(PyValueError::new_err(
+                    "Max balance difference must be positive",
+                ));
             }
             Ok(Self {
                 inner: self.inner.clone().with_max_balance_diff(max_balance_diff),
@@ -1192,11 +1196,7 @@ mod python {
                 .map_err(|e| PyValueError::new_err(e.to_string()))
         }
 
-        fn assign(
-            &self,
-            data: PyReadonlyArray2<f32>,
-            k: usize,
-        ) -> PyResult<Vec<Vec<usize>>> {
+        fn assign(&self, data: PyReadonlyArray2<f32>, k: usize) -> PyResult<Vec<Vec<usize>>> {
             let data_view = data.as_array();
             self.inner
                 .assign(data_view, k)
@@ -1230,7 +1230,9 @@ mod python {
 
         #[getter]
         fn centroids<'py>(&self, py: Python<'py>) -> Option<Bound<'py, PyArray2<f32>>> {
-            self.inner.centroids().map(|c| PyArray2::from_array(py, &c.to_owned()).into())
+            self.inner
+                .centroids()
+                .map(|c| PyArray2::from_array(py, &c.to_owned()).into())
         }
 
         #[getter]
