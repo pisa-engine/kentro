@@ -589,7 +589,7 @@ impl KMeans {
 
                         // Apply small symmetric perturbation
                         for k in 0..data.ncols() {
-                            if k % 2 == 0 {
+                            if k.is_multiple_of(2) {
                                 centroids[[i, k]] *= 1.0 + EPS;
                                 centroids[[j, k]] *= 1.0 - EPS;
                             } else {
